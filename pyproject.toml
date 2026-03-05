@@ -1,0 +1,10 @@
+[project]
+name = "envdeps"
+version = "0.1.0"
+description = "Python project dependency analyzer that is enviornment-aware."
+requires-python = ">=3.12"
+authors = [{ name = "Dominic Mancini", email = "dominicgmancini@gmail.com" }]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
