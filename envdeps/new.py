@@ -18,7 +18,7 @@ from envdeps.pkgs import (
 from envdeps.reqs import _parse_requirement
 from envdeps.utils import EnvDepsException, format_table, import_is_local
 
-DEFAULT_IGNORES = ["__pycache__", "resources"]
+DEFAULT_IGNORES = ["__pycache__", "resources", ".git", ".venv", "venv", ".pytest_cache"]
 
 
 def topath(p: PathOrStr, resolve: bool = True):

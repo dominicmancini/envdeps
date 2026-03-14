@@ -23,31 +23,108 @@ def strlist(val: str, sep=","):
 
 
 parent_parser = argparse.ArgumentParser(add_help=False)
-parent_parser.add_argument(
+parent_parser_group = parent_parser.add_argument_group("Base Arguments")
+parent_parser_group.add_argument(
     "-i",
     "--ignore",
     type=strlist,
     default=[],
     help="Comma seperated list of directories to ignore.",
 )
-parent_parser.add_argument(
+parent_parser_group.add_argument(
     "-e",
     "--env-prefix",
     type=Path,
     help="python environment prefix. Resolves to active venv/version.",
 )
-parent_parser.add_argument(
+parent_parser_group.add_argument(
     "-r",
     "--root",
     type=Path,
     default=None,
     help="Root of the project to scan. Defaults to CWD.",
 )
-parent_parser.add_argument(
-    "target",
+parent_parser_group.add_argument(
+    "-t",
+    "--target",
     type=Path,
     help="Target directory containing source files.",
 )
+
+
+def make_new_parser():
+    parser = argparse.ArgumentParser(description="Main Envdeps prog.")
+    subparsers = parser.add_subparsers(
+        dest="command",
+        help="Available (sub)commands",
+        # required=True,
+    )
+    # SECTION: 'show' command
+    show_command = subparsers.add_parser(
+        "show",
+        help="Inspect used project dependencies (Read-only)",
+        parents=[parent_parser],
+    )
+    show_command.add_argument(
+        "-f",
+        "--format",
+        choices=["text", "json", "table"],
+        type=str,
+        default="text",
+        help="Format to display used dependencies. Useful for piping into other tools.",
+    )
+    show_command.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show which files & imports triggered each dependency.",
+    )
+    # SECTION: 'export' command
+
+    export_command = subparsers.add_parser(
+        "export",
+        help="Scan used project dependencies and export to desired format.",
+        parents=[parent_parser],
+    )
+    export_command.add_argument(
+        "-f",
+        "--format",
+        choices=["pyproject", "requirements"],
+        type=str,
+        help="Dependency format to use (if blank, will auto-detect based on file extension of 'path')",
+    )
+    export_command.add_argument(
+        "-s",
+        "--specifier",
+        type=str,
+        default=None,
+        help="The version operator to use (e.g. '>=', '=='). If blank, no version specifier is used.",
+    )
+
+    merge_group_export = export_command.add_argument_group(
+        "Merge Options", "Options to control merge behavior."
+    )
+    merge_group_export.add_argument(
+        "-m",
+        "--merge",
+        action="store_true",
+        help="Merge with existing dependencies listed in 'path'.",
+    )
+    merge_group_export.add_argument(
+        "--remove-unknown",
+        action="store_true",
+        help="Remove unknown entries in dependencies.",
+    )
+    merge_group_export.add_argument(
+        "--remove-unused",
+        action="store_true",
+        help="Remove listed dependencies that are not used in project (not found in scan).",
+    )
+    merge_group_export.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="Update the specifier & version of existing dependencies to use `--specifier` with installed package version.",
+    )
+    return parser
 
 
 def make_parser():
@@ -130,9 +207,14 @@ def parse_args(argv: list[str]):
 
 
 if __name__ == "__main__":
-    parser = make_parser()
-    args = parser.parse_args(["--help"])
+    parser = make_new_parser()
+    args = parser.parse_args(
+        ["export", "--ignore=__pycache__", "--target=envdeps", "--root=.", "--merge"]
+    )
     print(args)
+    # parser = make_parser()
+    # args = parser.parse_args(["reqs", "--root=.", "envdeps"])
+    # print(args)
     # parse_args(
     #     [
     #         "pyproject",

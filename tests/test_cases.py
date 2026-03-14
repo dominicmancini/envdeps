@@ -1,3 +1,4 @@
+from argparse import Namespace
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,6 +38,18 @@ class TestCaseAnalyzer:
                 args.append(f"{k}={v}")
         args.append(self.target)
         return list(args)
+
+    def to_ns(self, cmd: str):
+        return Namespace(
+            command=cmd,
+            ignore=self.ignore,
+            env_prefix=Path(self.prefix),
+            root=Path(self.root),
+            target=Path(self.target),
+            mode=self.mode,
+            print=False,
+            output=False,
+        )
 
 
 class VerifyDeps(TypedDict):
