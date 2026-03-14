@@ -183,4 +183,7 @@ pyrightconfig.json
 /*.py
 !/main.py
 
+# Dev stuff
+/dev
+
 
