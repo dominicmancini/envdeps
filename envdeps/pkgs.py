@@ -48,9 +48,10 @@ class PkgInfo:
             return NotImplemented
 
     def to_req(self, spec: str | SpecifierSet, validate: bool = False) -> Requirement:
-        """Convert this `PkgInfo` into a `Requirement` object with the specified
-        `SpecifierSet` or `str`. If spec is `str`, it should only be an operator
-        (e.g., `>=`, `=`, etc.) and version will be taken from `PkgInfo.version`.
+        """Convert this `PkgInfo` into a `Requirement` object with the
+        specified `SpecifierSet` or `str`. If spec is `str`, it should only be
+        an operator (e.g., `>=`, `=`, etc.) and version will be taken from
+        `PkgInfo.version`.
 
         Args:
             spec: str 'Operator' or `SpecifierSet` object.
@@ -91,6 +92,7 @@ class PkgInfo:
 
 def resolve_active_env_prefix() -> Path | None:
     """Resolve the active python environment prefix.
+
     In order, the following are checked and returned if present:
     - `$VIRTUAL_ENV`: Used for when std `venv` is active.
     - `$PYENV_VIRTUAL_ENV`: Used when a `pyenv` version/virtualenv is activated
@@ -120,7 +122,7 @@ def resolve_active_env_prefix() -> Path | None:
 
 
 def get_env_site_dir(env_prefix: Path | str) -> list[str]:
-    """Get the list of site directory paths for the current python prefix"""
+    """Get the list of site directory paths for the current python prefix."""
     if isinstance(env_prefix, str):
         env_prefix = Path(env_prefix)
     if not env_prefix.is_absolute():
@@ -144,6 +146,7 @@ def get_installed_dists(site_dirs: list[str]) -> list[metadata.Distribution]:
 
 def get_top_level_imports(dist: metadata.Distribution) -> list[str]:
     """Given a distribution, find the top-level imports for the package.
+
     This first checks if `top_level.txt` is available for dist, falling
     back to extracting module names from files in package.
     """
