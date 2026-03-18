@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
+from importlib.metadata import Distribution
 from pathlib import Path
 
-from envdeps.dependencies import PackageRequirement, RequirementSet
-from envdeps.environment import Environment, TLImports
+from envdeps.environment import Environment
+from envdeps.main import EnvDeps
 from envdeps.new import DEFAULT_IGNORES
-from envdeps.scanner import FileImports, ProjectScanner
+from envdeps.scanner import ImportSet, ProjectScanner
 
 abspath = lambda path: Path(path).expanduser().resolve()
 
@@ -24,13 +25,11 @@ data = Tester(
 )
 
 
-def file_imported_packages(fimports: FileImports, tl_imports: TLImports):
-    file_to_pkg_imports = {}
-    for file, imps in fimports.items():
-        for dist, pkg in tl_imports.items():
-            if imps.isdisjoint(pkg.imports):
-                file_to_pkg_imports[file] = pkg
-    return file_to_pkg_imports
+def verbose_imports(imports_by_file: dict[str, dict[Distribution, ImportSet]]):
+    for file, dist_imports in imports_by_file.items():
+        print(file)
+        for dist, imports in dist_imports.items():
+            print(f"\t{dist.name}: {imports}")
 
 
 def main():
@@ -39,28 +38,15 @@ def main():
     all_imports, file_imports = scanner.scan()
     env = Environment(data.prefix, data.root, data.ignore_dirs)
     pkg_imports = env.resolve(all_imports)
-    for pkg, imps in pkg_imports.items():
-        print(f"{pkg.name}: {imps}")
+    # NOTE: to check verbose imports, use:
+    imports_by_file = env.get_package_imports_by_file(pkg_imports, file_imports)
+    verbose_imports(imports_by_file)
 
 
-reqs_1 = RequirementSet(
-    [
-        PackageRequirement("typer>=0.12.1"),
-        PackageRequirement("pandas"),
-        PackageRequirement("numpy==0.1.2"),
-    ]
-)
-
-reqs_2 = RequirementSet(
-    [
-        PackageRequirement("typer"),
-        PackageRequirement("pandas>=0.12.1"),
-        PackageRequirement("matplotlib<=0.12"),
-    ]
-)
+def new_main():
+    ed = EnvDeps(data.target, data.root, data.prefix, DEFAULT_IGNORES)
+    ed.show("text", False)
 
 
-# if __name__ == "__main__":
-#     print(f"{reqs_1.merge(reqs_2, update=True)=}")
-#     print(f"{reqs_1.merge(reqs_2, False)=}")
-#     print(f"{reqs_1.intersection(reqs_2)=}")
+if __name__ == "__main__":
+    new_main()

@@ -7,7 +7,6 @@ from loguru import logger
 
 from envdeps.common import Dependency, OutputFormat, PathOrStr
 from envdeps.formats import Pyproj, Requirements
-from envdeps.main import SpecifierMode
 from envdeps.parse import collect_target_dir_imports
 from envdeps.pkgs import (
     get_env_site_dir,
@@ -56,7 +55,7 @@ class DependencyAnalyzer:
         target_dir: PathOrStr,
         root: PathOrStr,
         ignore_dirs: list[str] = DEFAULT_IGNORES,
-        mode: SpecifierMode = ">=",
+        mode: str = ">=",
     ) -> None:
         if prefix is None:
             prefix = resolve_active_env_prefix()

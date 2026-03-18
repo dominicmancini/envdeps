@@ -1,10 +1,12 @@
 import argparse
 import shutil
 from pathlib import Path
+from warnings import deprecated
 
-from loguru import logger
-
-from envdeps.main import ProjectDependencies
+from envdeps.common import DEFAULT_IGNORES, BaseCommand, ExportCommand, ShowCommand
+from envdeps.main import EnvDeps
+from envdeps.pkgs import resolve_active_env_prefix
+from envdeps.utils import resolve_paths
 
 
 def get_terminal_width():
@@ -16,10 +18,43 @@ def get_terminal_width():
 
 
 def strlist(val: str, sep=","):
-    values = []
     if not val:
         return None
     return val.split(sep)
+
+
+@deprecated("IMPLEMENTED in 'BaseCommand._resolve_base_args()'")
+def resolve_verify_args(args: BaseCommand):
+    root = args.root
+    target = args.target
+    resolved_root, resolved_target = resolve_paths(root, target)
+    args.root = resolved_root
+    args.target = resolved_target
+    if args.prefix is None:
+        prefix = resolve_active_env_prefix()
+        if not prefix:
+            raise ValueError("Python Environment Prefix could not be resolved")
+        args.prefix = prefix
+    if not args.prefix.exists():
+        raise ValueError(
+            f"Environment prefix does not exist: {args.prefix}",
+            "Check current environment prefix.",
+        )
+    args.ignore = list(DEFAULT_IGNORES.union(args.ignore))
+    return args
+
+
+def show_cmd_cb(args: BaseCommand):
+    args = ShowCommand.from_base(args)
+    print("Hello from command 'show'\n\n")
+    envdeps = EnvDeps(args.target, args.root, args.prefix, args.ignore)
+    envdeps.show(args.format, args.verbose)
+
+
+def export_cmd_cb(args: BaseCommand):
+    args = ExportCommand.from_base(args)
+    print("Hello from command 'export'")
+    print(args)
 
 
 parent_parser = argparse.ArgumentParser(add_help=False)
@@ -34,6 +69,7 @@ parent_parser_group.add_argument(
 parent_parser_group.add_argument(
     "-e",
     "--env-prefix",
+    dest="prefix",
     type=Path,
     help="python environment prefix. Resolves to active venv/version.",
 )
@@ -52,7 +88,7 @@ parent_parser_group.add_argument(
 )
 
 
-def make_new_parser():
+def make_parser():
     parser = argparse.ArgumentParser(description="Main Envdeps prog.")
     subparsers = parser.add_subparsers(
         dest="command",
@@ -78,6 +114,7 @@ def make_new_parser():
         action="store_true",
         help="Show which files & imports triggered each dependency.",
     )
+    show_command.set_defaults(func=show_cmd_cb)
     # SECTION: 'export' command
 
     export_command = subparsers.add_parser(
@@ -124,104 +161,40 @@ def make_new_parser():
         action="store_true",
         help="Update the specifier & version of existing dependencies to use `--specifier` with installed package version.",
     )
+    export_command.set_defaults(func=export_cmd_cb)
+
     return parser
-
-
-def make_parser():
-    # NOTE: Parent parser is for a comment set of options that can be shared by
-    # multiple commands.
-    parser = argparse.ArgumentParser(description="Main envdeps program.")
-    subparsers = parser.add_subparsers(
-        dest="command", required=True, help="Available (sub)commands"
-    )
-    # Subcmd: `imports` (print all used imports)
-    imports_parser = subparsers.add_parser(
-        "imports", help="Get all imports from source files.", parents=[parent_parser]
-    )
-    reqs_command = subparsers.add_parser(
-        "reqs",
-        help="Scan files and generate requirements (TODO)",
-        parents=[parent_parser],
-    )
-    reqs_command.add_argument(
-        "-p", "--print", action="store_true", help="Print to stdout?"
-    )
-    reqs_command.add_argument(
-        "-o",
-        "--out",
-        nargs="?",
-        type=Path,
-        action="store",
-        help="Output file to write to",
-        const="requirements.txt",
-        dest="output",
-    )
-    reqs_command.add_argument(
-        "-m",
-        "--mode",
-        type=str,
-        default="",
-        help="Operator to use for version specifier (eg. '>=', '=='). Omit or leave empty for no version specifier",
-    )
-    pyproject_command = subparsers.add_parser(
-        "pyproject", help="Scan files and update pyproject.toml"
-    )
-    pyproject_command.add_argument(
-        "-o",
-        "--out",
-        nargs="?",
-        type=Path,
-        action="store",
-        help="Output pyproject.toml file",
-        const="pyproject.toml",
-        dest="output",
-    )
-    return parser
-
-
-def reqs(args: argparse.Namespace):
-    print("TODO: Implement")
-    # pd = ProjectDependencies(args.env_prefix, args.target_dir, args.ignore_dir)
-
-
-def imports(args: argparse.Namespace):
-    logger.info("Hello from Imports")
-    # sys.exit(0)
-    pd = ProjectDependencies(args.env_prefix, args.target, args.ignore, root=args.root)
-    pkg_imports = pd.resolve_imported_packages()
-    width = get_terminal_width()
-    print(f"{'Package':<20}{'Imports':>20}")
-    print("=" * get_terminal_width())
-    for pkg, imports in pkg_imports.items():
-        print(f"{pkg:<20}{','.join(imports):>20}")
 
 
 def parse_args(argv: list[str]):
     parser = make_parser()
-    args = parser.parse_args(argv)
+    ns = BaseCommand()
+    args = parser.parse_args(argv, ns)
+    args = args._resolve_base_args()
+    args.func(args)
     # print(args)
-    # if args.command == "imports":
-    #     imports(args)
+    # args = args._resolve_base_args()
+    # print(args)
+    # if args.command == "export":
+    #     export_cmd_cb(args)
     # else:
-    #     print("Cmd not implemented yet.")
+    #     show_cmd_cb(args)
 
+
+# SEE: Example namespace object
+# Namespace(command='show', ignore=[], env_prefix=None, root=PosixPath('.'), target=PosixPath('envdeps'), format='text', verbose=True)
 
 if __name__ == "__main__":
-    parser = make_new_parser()
-    args = parser.parse_args(
-        ["export", "--ignore=__pycache__", "--target=envdeps", "--root=.", "--merge"]
-    )
-    print(args)
-    # parser = make_parser()
-    # args = parser.parse_args(["reqs", "--root=.", "envdeps"])
-    # print(args)
+    parse_args(["show", "--target=envdeps", "--root=.", "--format=table", "--verbose"])
     # parse_args(
     #     [
-    #         "pyproject",
-    #         "--help",
-    #         # "--out",
-    #         # "--ignore",
-    #         # "__pycache__,resources,tests",
-    #         # "envdeps",
+    #         "export",
+    #         "--ignore=TEST_IGNORE,__pycache__",
+    #         # "--root=.",
+    #         "--format=requirements",
+    #         "--merge",
+    #         "--update-existing",
+    #         "--specifier='>='",
+    #         "--target=envdeps",
     #     ]
     # )

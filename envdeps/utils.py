@@ -10,6 +10,28 @@ class EnvDepsException(Exception):
     pass
 
 
+# Source - https://stackoverflow.com/a/287944
+class bcolors:
+    """Ansi escape codes for displaying colored text.
+
+    Prefix text string with color, end each colored section by
+    using `bcolors.ENDC`
+
+    Usage::
+        print(bcolors.WARNING + "ERROR: YOU DIED" + bcolors.ENDC)
+    """
+
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
+
 ROOT_MARKERS = {
     ".git",
     ".gitignore",
@@ -28,6 +50,104 @@ ROOT_MARKERS = {
     "venv",
     ".python-version",
 }
+
+
+def _obj_iterable(obj: object):
+    return (
+        hasattr(obj, "__iter__")
+        and hasattr(obj, "__len__")
+        and not isinstance(obj, str)
+    )
+
+
+def _fmt_obj_repr(obj: object, shorten: bool = True):
+    type_name = type(obj).__name__
+    args = vars(obj)
+    attrs = []
+    for name, value in args.items():
+        if _obj_iterable(value) and shorten:
+            value = f"{type(value).__name__}[{len(value)}]"
+        attrs.append("%s=%r" % (name, value))
+    attrs_str = ",\n\t".join(attrs)
+    return f"{type_name}(\n\t{attrs_str}\n)"
+
+
+def _validate_path(abs_path: Path, name: str, is_directory: bool = True) -> None:
+    if not abs_path.exists():
+        raise ValueError(f"{name} does not exist: {abs_path}.")
+
+    if is_directory:
+        if not abs_path.is_dir():
+            raise ValueError(f"{name} is not a directory: {abs_path}")
+    else:
+        if not abs_path.is_file():
+            raise ValueError(f"{name} is not a file: {abs_path}")
+
+
+# NOTE: Basic aliases so that it is clear
+# which path is which for `resolve_paths`
+type RootPath = Path
+type TargetPath = Path
+
+
+def resolve_paths(
+    root: Path | None, target: Path | None
+) -> tuple[RootPath, TargetPath]:
+    """Resolve the root and target path (as given from the cmdline arguments '
+    --root' & '--target'), returning validated, absolute paths for both.
+
+    - `target` and `root` default to `Path.cwd()` if not provided.
+    - if `target` is relative, it is joined with `root` and validated
+    - Once both made absolute, target is checked to be a child/inside of `root`.
+
+
+    Args:
+        root: Root directory of project to scan (default to CWD)
+        target: Target directory containing source files to project to scan (default CWD)
+
+    Returns:
+        root, target: Resolved (absolute) and validated root and target paths.
+
+    Raises:
+        ValueError: If resolved path does not exist, is not a directory, or target is not a 'descendent'/child of root.
+    """
+    cwd = Path.cwd()
+
+    # first, resolve root
+    root = root if root else cwd
+    root = root.expanduser().resolve()
+
+    # Raise exception if not valid
+    _validate_path(root, "--root", True)
+    # if not root.exists():
+    #     raise ValueError(f"--root does not exist: {root}")
+    # if not root.is_dir():
+    #     raise ValueError(f"--root is not a directory: {root}")
+
+    # 2nd, resolve target
+    if target:
+        target = target.expanduser()
+        if target.is_absolute():
+            target = target.resolve()
+        else:
+            # NOTE: relative to root, not cwd
+            target = (root / target).resolve()
+    else:
+        target = root  # Fallback to root
+
+    # 3rd, validate
+    _validate_path(target, "--target", True)
+
+    # ensure target is child of root
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise ValueError(
+            "--target must be the same or inside --root\n",
+            f"root: {root}",
+            f"target: {target}",
+        )
+    return root, target
 
 
 def dep_list_to_pyproject(deps: list[str]) -> str:

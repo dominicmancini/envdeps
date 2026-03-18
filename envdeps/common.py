@@ -1,17 +1,121 @@
+import argparse
 from importlib.metadata import Distribution
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Callable, Iterator, Literal
+from warnings import deprecated
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from envdeps.pkgs import PkgInfo, normalize
+from envdeps.pkgs import PkgInfo, normalize, resolve_active_env_prefix
+from envdeps.utils import resolve_paths
 
 type PathOrStr = Path | str
 
 OutputFormat = Literal["requirements.txt", "pyproject.toml"]
 
+DEFAULT_IGNORES = {
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    "ENV",
+    "build",
+    "dist",
+    ".eggs",
+    "pip-wheel-metadata",
+    ".pytest_cache",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".ipynb_checkpoints",
+    ".git",
+    ".hg",
+    ".svn",
+    ".idea",
+    ".vscode",
+    ".cache",
+    "htmlcov",
+}
 
+
+class BaseCommand(argparse.Namespace):
+    # NOTE: 'target', 'ignore', and 'root' may be None initially.
+    # However, they should be `Path` after '_resolve_base_args()'
+    # otherwise there is a problem (shouldn't happen).
+    # Not doing 'Path|None' for type reasons.
+    command: Literal["show", "export"]
+    target: Path
+    ignore: list[str]
+    root: Path
+    prefix: Path
+    func: Callable[[argparse.Namespace], None]
+
+    def _resolve_base_args(self):
+        """Resolve and validate the base args.
+
+        This provides the fallback/default values if they are not
+        provided and validates path arguments.
+        """
+        resolved_root, resolved_target = resolve_paths(self.root, self.target)
+        self.root, self.target = resolved_root, resolved_target
+        if self.prefix is None:
+            prefix = resolve_active_env_prefix()
+            if not prefix:
+                raise ValueError("Python Environment Prefix could not be resolved")
+            self.prefix = prefix
+        if not self.prefix.exists():
+            raise ValueError(
+                f"Environment prefix does not exist: {self.prefix}",
+                "Check current environment prefix.",
+            )
+        self.ignore = list(DEFAULT_IGNORES.union(self.ignore))
+        return self
+
+    # func: Callable[[Self]] | None
+
+    # def __repr__(self) -> str:
+    #     rep = super().__repr__()
+    #     rep = rep.replace("(", "(\n\t ", 1).replace(",", ",\n\t")
+    #     return rep
+    def __repr__(self) -> str:
+        type_name = type(self).__name__
+        args = vars(self)
+        arg_strs = []
+        for name, value in args.items():
+            if isinstance(value, list):
+                value = f"list[{len(value)}]"
+            arg_strs.append("%s=%r" % (name, value))
+        attrs_str = ",\n\t".join(arg_strs)
+        return f"{type_name}(\n\t{attrs_str}\n)"
+        # inner = "\n\t".join(i for i in arg_strs)
+
+
+class ShowCommand(BaseCommand):
+    format: Literal["text", "json", "table"]
+    verbose: bool
+
+    @classmethod
+    def from_base(cls, args: BaseCommand):
+        return cls(**vars(args))
+
+
+class ExportCommand(BaseCommand):
+    format: Literal["pyproject", "requirements"]
+    merge: bool
+    remove_unknown: bool
+    remove_unused: bool
+    update_existing: bool
+    specifier: str | None = None
+
+    @classmethod
+    def from_base(cls, args: BaseCommand):
+        return cls(**vars(args))
+
+
+@deprecated("MOVING TO 'PackageRequirement'", category=Warning)
 class Dependency(Requirement):
     @classmethod
     def from_dist(cls, dist: Distribution, mode: str):
