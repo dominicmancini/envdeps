@@ -1,6 +1,6 @@
 import pytest
 
-from envdeps.dependencies import PackageRequirement, RequirementSet
+from envdeps.dependencies import Dependency, RequirementSet
 from envdeps.utils import format_table
 
 options_testcase = {
@@ -71,7 +71,7 @@ def test_reqset(remove_unused, update_existing, remove_unknown):
         and options_testcase["updated_versions"]
         or options_testcase["preserved_versions"]
     )
-    update_preserve = [PackageRequirement(i) for i in update_preserve_list]
+    update_preserve = [Dependency(i) for i in update_preserve_list]
     failed_reqs = []
     for req in update_preserve:
         res = merged.get(req.name)
@@ -88,7 +88,7 @@ def test_reqset(remove_unused, update_existing, remove_unknown):
     return
     if update_existing:
         failed_reqs = []
-        updated = [PackageRequirement(i) for i in options_testcase["updated_versions"]]
+        updated = [Dependency(i) for i in options_testcase["updated_versions"]]
         for req in updated:
             res = merged.get(req.name)
             if res and res.deep_equal(req):
@@ -101,9 +101,7 @@ def test_reqset(remove_unused, update_existing, remove_unknown):
             print("Passed update.")
     else:
         failed_reqs = []
-        preserved = [
-            PackageRequirement(i) for i in options_testcase["preserved_versions"]
-        ]
+        preserved = [Dependency(i) for i in options_testcase["preserved_versions"]]
         for req in preserved:
             res = merged.get(req.name)
             if res and res.deep_equal(req):
@@ -186,7 +184,7 @@ class TestRequirementSet:
         assert "flask" in self.rs, (
             "Failed string membership: 'flask' is in RequirementSet"
         )
-        assert PackageRequirement("flask") in self.rs, (
+        assert Dependency("flask") in self.rs, (
             "Failed PackageRequirement membership: PackageRequirement('flask') is in RequirementSet"
         )
         assert "fastapi" not in self.rs, (
@@ -226,7 +224,7 @@ def mixed_requirement_set_check():
     rs.add("typer>=12.0")
     rs.add("flask")
     assert "typer" in rs, "Failed 'typer'(string) is in RequirementSet"
-    assert PackageRequirement("typer") in rs, (
+    assert Dependency("typer") in rs, (
         "Failed 'typer'(PackageRequirement) is in RequirementSet"
     )
 

@@ -2,13 +2,13 @@ from typing import Sequence, TypedDict
 
 from packaging.requirements import InvalidRequirement, Requirement
 
-from envdeps.common import Dependency
+from envdeps.common import OldDependency
 from envdeps.formats import Pyproj, Requirements
 from envdeps.new import OutputFormat
 from envdeps.utils import format_table
 
-type DepList = Sequence[Dependency]
-type MixedList = Sequence[Dependency | Requirement | str]
+type DepList = Sequence[OldDependency]
+type MixedList = Sequence[OldDependency | Requirement | str]
 import pytest
 
 # TODO: FIX
@@ -33,11 +33,11 @@ def make_kwargs(**kwargs):
 def to_deps(*deps):
     dlist = []
     for dep in deps:
-        if isinstance(dep, Dependency):
+        if isinstance(dep, OldDependency):
             dlist.append(dep)
         else:
             try:
-                dlist.append(Dependency(str(dep)))
+                dlist.append(OldDependency(str(dep)))
             except InvalidRequirement:
                 dlist.append(dep)
     return dlist
@@ -58,14 +58,14 @@ options_testcase = {
 }
 
 
-def convert_deps(dep_lines: list[str]) -> set[Dependency]:
+def convert_deps(dep_lines: list[str]) -> set[OldDependency]:
     """Convert dep strings to a set of Dependencies.
 
     This will raise exception if an object can't be converted.
     """
-    dep_deps: set[Dependency] = set()
+    dep_deps: set[OldDependency] = set()
     for dep in dep_lines:
-        dep_deps.add(Dependency(str(dep)))
+        dep_deps.add(OldDependency(str(dep)))
     return dep_deps
 
 
@@ -74,19 +74,21 @@ class TestOptionsFixed:
     # NOTE: This does not account for 'unknown' deps and does not consider the
     # 'remove_unknown' option. Implement Later.
     text: str = "\n".join(options_testcase["old"])
-    old: set[Dependency] = convert_deps(Requirements(text).dependencies)
-    _scanned_list = [Dependency(i) for i in options_testcase["scanned"]]
-    scanned: set[Dependency] = convert_deps(options_testcase["scanned"])
-    unused: set[Dependency] = convert_deps(options_testcase["unused"])
-    unknown: set[Dependency] = convert_deps(options_testcase["unknown"])
-    updated_deps: set[Dependency] = convert_deps(options_testcase["updated_versions"])
-    preserved_deps: set[Dependency] = convert_deps(
+    old: set[OldDependency] = convert_deps(Requirements(text).dependencies)
+    _scanned_list = [OldDependency(i) for i in options_testcase["scanned"]]
+    scanned: set[OldDependency] = convert_deps(options_testcase["scanned"])
+    unused: set[OldDependency] = convert_deps(options_testcase["unused"])
+    unknown: set[OldDependency] = convert_deps(options_testcase["unknown"])
+    updated_deps: set[OldDependency] = convert_deps(
+        options_testcase["updated_versions"]
+    )
+    preserved_deps: set[OldDependency] = convert_deps(
         options_testcase["preserved_versions"]
     )
 
     def _get_merged_deps(
         self, remove_unused=True, update_existing=False
-    ) -> set[Dependency]:
+    ) -> set[OldDependency]:
         opts = FormatOpts(
             remove_unknown=False,
             remove_unused=remove_unused,
@@ -144,7 +146,7 @@ class TestDependencyFormat:
     ):
         if isinstance(text, list):
             text = "\n".join(text)
-        self.scanned: Sequence[Dependency | str] = to_deps(*scanned_deps)
+        self.scanned: Sequence[OldDependency | str] = to_deps(*scanned_deps)
         self.merge_opts = kwargs
         self.opts = FormatOpts(**DEFAULT_OPTS | kwargs)
 
@@ -186,7 +188,7 @@ class TestDependencyFormat:
         If `self.opts["remove_unused"] == False`, the `self.old` dependencies not found
         in `self.scanned` should still be kept.
         """
-        old_valid_deps = [dep for dep in self.old if isinstance(dep, Dependency)]
+        old_valid_deps = [dep for dep in self.old if isinstance(dep, OldDependency)]
         unused_deps = [dep for dep in old_valid_deps if dep not in self.scanned]
         merged_deps_unused = []
         for dep in self.merged:
@@ -207,13 +209,13 @@ class TestDependencyFormat:
         original version specifier (if `self.opts["update_existing"] == False`)
         or whether they have used the one from `self.scanned`
         (`self.opts["update_existing"] == True`)"""
-        old_deps = [dep for dep in self.old if isinstance(dep, Dependency)]
+        old_deps = [dep for dep in self.old if isinstance(dep, OldDependency)]
         # We want to check whether existing dependencies had version updated or
         # kept original
         # get dependencies that were both in 'self.old' and 'self.new' (by name
         # only)
-        scanned_deps = [dep for dep in self.scanned if isinstance(dep, Dependency)]
-        merged_deps = [dep for dep in self.merged if isinstance(dep, Dependency)]
+        scanned_deps = [dep for dep in self.scanned if isinstance(dep, OldDependency)]
+        merged_deps = [dep for dep in self.merged if isinstance(dep, OldDependency)]
         updated_versions = []
         preserved_versions = []
         for mdep in merged_deps:
@@ -276,7 +278,7 @@ class TestDependencyFormat:
 
 
 if __name__ == "__main__":
-    d = Dependency("typer")
+    d = OldDependency("typer")
     # print(f"{d.normalized_name=}")
     # print(f"{canonicalize_name(d.name)=}")
     # print(f"{d == Dependency("typer>=1.2.3")=}")

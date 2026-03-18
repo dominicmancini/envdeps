@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from envdeps import utils
-from envdeps.dependencies import RequirementSet
+from envdeps.dependencies import Dependency, RequirementSet
 from envdeps.formatters.base import BaseFormatter
 from envdeps.formatters.pyproject import PyProjectFormatter
 from envdeps.formatters.requirements import RequirementsFormatter
@@ -72,6 +72,22 @@ def test_pyproj(lines: list[str]):
     _fmt_test(p)
 
 
+def test_load(fmt: BaseFormatter):
+    print("Before loading")
+    print(fmt.dependencies)
+    fmt.load()
+    print("After loading")
+    print(fmt.dependencies)
+
+
+def test_overwrite_deps(fmt: BaseFormatter, new_deps: RequirementSet):
+    print("Original Dependencies")
+    fmt.dependencies._view()
+    fmt.dependencies = new_deps
+    print("New Dependencies:")
+    fmt.dependencies._view()
+
+
 test = """
 # This is a comment
 pynvim>=12.1.4
@@ -84,6 +100,22 @@ pandas>=0.12
 # TODO: Fix or remove the '.load()' mechanism of the Formatters
 
 
+if __name__ == "__main__":
+    pyfmt = PyProjectFormatter.from_file(
+        Path("/home/domancini/projects/submeddits/pyproject.toml")
+    )
+    reqfmt = RequirementsFormatter.from_file(test_req_path)
+    new_deps = RequirementSet(
+        [
+            Dependency("purple>=10.2.3"),
+            Dependency("pink==0.12"),
+            Dependency("green"),
+        ]
+    )
+    print("Pyproject.toml:\n")
+    test_overwrite_deps(pyfmt, new_deps)
+    print("\nRequirements:\n")
+    test_overwrite_deps(reqfmt, new_deps)
 # reqs = Requirements.from_file(test_req_path)
 # reqs.load()
 # deps = RequirementSet(reqs.dependencies)

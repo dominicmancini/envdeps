@@ -2,7 +2,13 @@ from envdeps.common import PathOrStr
 from envdeps.formatters.base import BaseFormatter
 
 
+# NOTE: This one calls '.load()' in the __init__ now.
+# No need to call it manually
 class RequirementsFormatter(BaseFormatter):
+    def __init__(self, text: str = "") -> None:
+        super().__init__(text)
+        self.load()
+
     def load(self) -> None:
         return super().load()
 

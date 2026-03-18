@@ -6,11 +6,14 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
 from pprint import pformat
+from warnings import deprecated
 
 from loguru import logger
+from rich.pretty import pretty_repr
+from rich.table import Table
 
 from envdeps.common import DEFAULT_IGNORES
-from envdeps.dependencies import PackageRequirement, RequirementSet
+from envdeps.dependencies import Dependency, RequirementSet
 from envdeps.pkgs import get_top_level_imports
 from envdeps.scanner import FileImports, ImportSet
 from envdeps.utils import import_is_local
@@ -61,6 +64,7 @@ class DependencyResolver:
         self._ignore_dirs = ignore_dirs
         if not prefix.exists():
             raise ValueError(f"Prefix path does not exist: {prefix}")
+        self._prefix = prefix
         self._site_dirs = self._get_site_dirs(prefix)
         self.dist_map: DistMap = self._build_dist_map()
         self.resolved: dict[str, ResolvedDependency] = {}
@@ -118,7 +122,7 @@ class DependencyResolver:
         # reqs = RequirementSet()
         reqs = set()
         for name, dep in self.resolved.items():
-            reqs.add(PackageRequirement.from_dist(dep.dist, mode))
+            reqs.add(Dependency.from_dist(dep.dist, mode))
         return RequirementSet(reqs)
 
     def to_json(self) -> str:
@@ -160,7 +164,32 @@ class DependencyResolver:
         # format_table(*data.values(), header=list(data.keys()))
         return data
 
+    def to_table(self, verbose: bool = False):
+        title = f"Scanned Packages in '{self._root.name}'"
+        caption = f"Env: '{self._prefix.name}'"
+        headers = ["Package", "Version"]
+        if verbose:
+            headers.append("Used in")
+        tbl = Table(title=title, caption=caption)
+        for header in headers:
+            tbl.add_column(header=header)
+        for name, dep in self.resolved.items():
+            row = [dep.canonical_name, dep.version]
+            if verbose:
+                if dep.all_files:
+                    files = list(dep.all_files)
+                    first = files.pop(0)
+                    files.insert(0, os.path.relpath(first))
+                    # fs = list(os.path.relpath(files[0])) + files[1:]
+                    f = pretty_repr(files, max_length=1)
+                else:
+                    f = ""
+                row.append(f)
+            tbl.add_row(*row)
+        return tbl
 
+
+@deprecated("Use 'DependencyResolver' (see 'envdeps/main.py')")
 class Environment:
     """Class representing the project's python environment. This is used to
     find all the installed packages in the environment. The class:

@@ -1,12 +1,37 @@
 import argparse
+import os
 import shutil
 from pathlib import Path
-from warnings import deprecated
 
-from envdeps.common import DEFAULT_IGNORES, BaseCommand, ExportCommand, ShowCommand
+from envdeps.common import BaseCommand, ExportCommand, ShowCommand
 from envdeps.main import EnvDeps
-from envdeps.pkgs import resolve_active_env_prefix
-from envdeps.utils import resolve_paths
+
+
+# NOTE: To get colorized output, replace '... = argparse.ArgumentParser(..)' with '... =
+# RichArgumentParser(...)'
+class RichArgumentParser(argparse.ArgumentParser):
+    pass
+    # def print_help(self, file=None):
+    #     help_text = self.format_help()
+    #     text = Text(help_text)
+    #
+    #     # Colorize section headings (e.g. "positional arguments:", "options:")
+    #     for match in re.finditer(r"^[a-zA-Z ]+:$", help_text, re.MULTILINE):
+    #         text.stylize("bold green", match.start(), match.end())
+    #
+    #     # Colorize short options like -h, -v
+    #     for match in re.finditer(r"(?<!\w)-[a-zA-Z]", help_text):
+    #         text.stylize("bold cyan", match.start(), match.end())
+    #
+    #     # Colorize long options like --help, --verbose
+    #     for match in re.finditer(r"--[a-zA-Z\-]+", help_text):
+    #         text.stylize("bold cyan", match.start(), match.end())
+    #
+    #     # Colorize the usage: prefix
+    #     for match in re.finditer(r"^usage:", help_text, re.MULTILINE):
+    #         text.stylize("bold yellow", match.start(), match.end())
+    #
+    #     console.print(text)
 
 
 def get_terminal_width():
@@ -23,27 +48,6 @@ def strlist(val: str, sep=","):
     return val.split(sep)
 
 
-@deprecated("IMPLEMENTED in 'BaseCommand._resolve_base_args()'")
-def resolve_verify_args(args: BaseCommand):
-    root = args.root
-    target = args.target
-    resolved_root, resolved_target = resolve_paths(root, target)
-    args.root = resolved_root
-    args.target = resolved_target
-    if args.prefix is None:
-        prefix = resolve_active_env_prefix()
-        if not prefix:
-            raise ValueError("Python Environment Prefix could not be resolved")
-        args.prefix = prefix
-    if not args.prefix.exists():
-        raise ValueError(
-            f"Environment prefix does not exist: {args.prefix}",
-            "Check current environment prefix.",
-        )
-    args.ignore = list(DEFAULT_IGNORES.union(args.ignore))
-    return args
-
-
 def show_cmd_cb(args: BaseCommand):
     args = ShowCommand.from_base(args)
     print("Hello from command 'show'\n\n")
@@ -54,10 +58,21 @@ def show_cmd_cb(args: BaseCommand):
 def export_cmd_cb(args: BaseCommand):
     args = ExportCommand.from_base(args)
     print("Hello from command 'export'")
-    print(args)
+    write = not args._debug
+    envdeps = EnvDeps(args.target, args.root, args.prefix, args.ignore)
+    envdeps.export(
+        args.path,
+        args.format,
+        args.specifier,
+        args.merge,
+        args.remove_unknown,
+        args.remove_unused,
+        args.update_existing,
+        _write=write,
+    )
 
 
-parent_parser = argparse.ArgumentParser(add_help=False)
+parent_parser = RichArgumentParser(add_help=False)
 parent_parser_group = parent_parser.add_argument_group("Base Arguments")
 parent_parser_group.add_argument(
     "-i",
@@ -86,10 +101,23 @@ parent_parser_group.add_argument(
     type=Path,
     help="Target directory containing source files.",
 )
+parent_parser_group.add_argument(
+    "-d",
+    "--debug",
+    dest="_debug",
+    action="store_true",
+    help="DEV: Do not actually write to `path` (for 'export'). Enable additional logging.",
+)
+parent_parser_group.add_argument(
+    "--color",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Enable/Disable colorized output (enabled by default).",
+)
 
 
 def make_parser():
-    parser = argparse.ArgumentParser(description="Main Envdeps prog.")
+    parser = RichArgumentParser(description="Main Envdeps prog.")
     subparsers = parser.add_subparsers(
         dest="command",
         help="Available (sub)commands",
@@ -133,7 +161,7 @@ def make_parser():
         "-s",
         "--specifier",
         type=str,
-        default=None,
+        default="",
         help="The version operator to use (e.g. '>=', '=='). If blank, no version specifier is used.",
     )
 
@@ -161,8 +189,15 @@ def make_parser():
         action="store_true",
         help="Update the specifier & version of existing dependencies to use `--specifier` with installed package version.",
     )
-    export_command.set_defaults(func=export_cmd_cb)
+    # NOTE: Finally, get the path to the desired output file
+    export_command.add_argument(
+        "path",
+        type=Path,
+        # default=None,
+        help="Path to the desired output file. Relative paths are interpreted relative to `--root` (cwd if unspecified). If `format` is not specified, it will be determined from this path's extension. ",
+    )
 
+    export_command.set_defaults(func=export_cmd_cb)
     return parser
 
 
@@ -170,31 +205,39 @@ def parse_args(argv: list[str]):
     parser = make_parser()
     ns = BaseCommand()
     args = parser.parse_args(argv, ns)
-    args = args._resolve_base_args()
+    if args.color == False:
+        os.environ["NO_COLOR"] = "1"
+        from envdeps import output
+
+        output.console.no_color = True
     args.func(args)
-    # print(args)
+    # print(args._resolved)
     # args = args._resolve_base_args()
-    # print(args)
-    # if args.command == "export":
-    #     export_cmd_cb(args)
-    # else:
-    #     show_cmd_cb(args)
+    # print(args._resolved)
 
 
-# SEE: Example namespace object
-# Namespace(command='show', ignore=[], env_prefix=None, root=PosixPath('.'), target=PosixPath('envdeps'), format='text', verbose=True)
+test_args = {
+    "show": [
+        "show",
+        "--target=envdeps",
+        "--root=.",
+        "--format=text",
+        "--verbose",
+        # "--no-color",
+    ],
+    "export": [
+        "export",
+        "--target=envdeps",
+        "--root=.",
+        "--format=pyproject",
+        "--debug",
+        "--merge",
+        "--remove-unused",
+        "requirements-test.txt",
+    ],
+}
 
 if __name__ == "__main__":
-    parse_args(["show", "--target=envdeps", "--root=.", "--format=table", "--verbose"])
-    # parse_args(
-    #     [
-    #         "export",
-    #         "--ignore=TEST_IGNORE,__pycache__",
-    #         # "--root=.",
-    #         "--format=requirements",
-    #         "--merge",
-    #         "--update-existing",
-    #         "--specifier='>='",
-    #         "--target=envdeps",
-    #     ]
-    # )
+    # parse_args(test_args["show"])
+    parse_args(test_args["export"])
+    # parse_args(["--help"])

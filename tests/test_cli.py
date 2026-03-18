@@ -1,78 +1,60 @@
-import argparse
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from pprint import pp
+from typing import Literal
 
 import pytest
 
 from envdeps.cli import make_parser
-from tests.test_cases import TestCaseAnalyzer
-
-tca = TestCaseAnalyzer
-
-# Example Namespace
-# Namespace(command='reqs', ignore=[], env_prefix=None, root=PosixPath('.'),
-# target=PosixPath('envdeps'), print=False, o
-# utput=None, mode='')
-#
-
-
-getprefix = lambda ver: os.path.join("/home/domancini/.pyenv/versions", ver)
+from envdeps.common import BaseCommand, ShowCommand
 
 prefix = os.getenv("VIRTUAL_ENV")
+assert prefix is not None
 if not prefix:
     raise ValueError("No venv prefix.")
 
-testdata = [
-    tca("envdeps", "envdeps", "~/projects/envdeps", prefix),
-    tca(
-        "submeddits",
-        "submeddits",
-        "~/projects/envdeps/submeddits",
-        getprefix("datascience"),
-    ),
-    tca("resume", "src/resume", "~/projects/resume", getprefix("resume_venv")),
-]
 
-# Example Namespace
-# Namespace(command='reqs', ignore=[], env_prefix=None, root=PosixPath('.'),
-# target=PosixPath('envdeps'), print=False, o
-# utput=None, mode='')
-#
+@dataclass
+class CliCase:
+    cmd: Literal["show", "export"]
+    argv: list[str]
 
 
-class TestCliParser:
-    @pytest.fixture(autouse=True)
-    def setup(self, data: TestCaseAnalyzer):
-        parser = make_parser()
-        self.data = data
-        self.parser = make_parser()
-
-    def test_base_args(self):
-        argv = self.data.to_cli("reqs")
-        args = self.parser.parse_args(argv)
-        assert args.env_prefix == Path(self.data.prefix)
-        assert args.target == Path(self.data.target)
-        assert args.root == Path(self.data.root)
-
-    # def test_reqs(self):
-    #     argv = self.data.to_cli("reqs")
-    #     args = self.parser.parse_args(argv)
+data = [CliCase("show", ["show", "--target=envdeps", "--format=json", "--verbose"])]
 
 
-def test_cli_parser(test: TestCaseAnalyzer, ns: argparse.Namespace):
-    argv = test.to_cli("reqs")
+@pytest.fixture
+def args():
+    test = data[0]
     parser = make_parser()
-    args = parser.parse_args(argv)
-    pp(test)
-    pp(args)
-    # print(f"{args._get_args()=}")
-    # print(f"{args._get_kwargs()=}")
-    # test_ns = test.to_ns("reqs")
-    # print(f"{args == test_ns=}")
+    ns = BaseCommand()
+    args = parser.parse_args(test.argv, ns)
+    return args
 
 
-t = TestCaseAnalyzer("default_opts", "envdeps", "~/projects/envdeps", prefix)
-test_cli_parser(t, argparse.Namespace())
+def test_show(args: BaseCommand):
+    cwd = Path.cwd()
+    if args.prefix is not None:
+        env_prefix = args.prefix
+    else:
+        env_prefix = Path(prefix)
+    cmd = ShowCommand.from_base(args)
+    assert cmd.root == cwd, f"Root not resolved to CWD: {cmd.root}"
+    assert cmd.prefix.samefile(env_prefix), "Args.prefix not same as current prefix"
+    assert cmd.prefix == env_prefix, "Env. Prefix does not match"
 
-# print(t.to_cli("reqs"))
+
+def check_args():
+    from rich import print
+
+    parser = make_parser()
+    ns = BaseCommand()
+    args = parser.parse_args(data[0].argv, ns)
+    print("Initial Args:", args)
+    cmd = ShowCommand.from_base(args)
+    print("Resolved args:", cmd)
+    print(prefix)
+
+
+if __name__ == "__main__":
+    check_args()

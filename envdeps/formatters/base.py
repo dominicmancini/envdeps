@@ -42,3 +42,9 @@ class BaseFormatter(ABC):
     def dump(self, path: PathOrStr) -> PathOrStr:
         """Write dependencies to the file specified by `path`."""
         pass
+
+    def _as_text(self) -> str:
+        if not self.dependencies:
+            return ""
+        text = self.dependencies.to_string()
+        return text

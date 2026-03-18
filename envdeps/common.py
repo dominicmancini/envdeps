@@ -53,6 +53,10 @@ class BaseCommand(argparse.Namespace):
     prefix: Path
     func: Callable[[argparse.Namespace], None]
 
+    _debug: bool  # Makes it so 'export' doesn't actually write to file
+
+    _resolved: bool = False
+
     def _resolve_base_args(self):
         """Resolve and validate the base args.
 
@@ -72,14 +76,9 @@ class BaseCommand(argparse.Namespace):
                 "Check current environment prefix.",
             )
         self.ignore = list(DEFAULT_IGNORES.union(self.ignore))
+        self._resolved = True
         return self
 
-    # func: Callable[[Self]] | None
-
-    # def __repr__(self) -> str:
-    #     rep = super().__repr__()
-    #     rep = rep.replace("(", "(\n\t ", 1).replace(",", ",\n\t")
-    #     return rep
     def __repr__(self) -> str:
         type_name = type(self).__name__
         args = vars(self)
@@ -99,24 +98,84 @@ class ShowCommand(BaseCommand):
 
     @classmethod
     def from_base(cls, args: BaseCommand):
-        return cls(**vars(args))
+        """Create `ShowCommand` object from a `BaseCommand`.
+
+        This method resolves the 'BaseCommand' (`args`) first if not already
+        resolved and validates the show attributes.
+
+        Args:
+            args: BaseCommand object (with `command=show`)
+
+        Returns:
+            show_inst: `ShowCommand` instance.
+
+        Raises:
+            ValueError: If `command != 'show' or `format` is not a valid option.
+        """
+        if args.command != "show":
+            raise ValueError(f"Not 'show' command: {args.command}")
+        if not args._resolved:
+            args = args._resolve_base_args()
+        show_inst = cls(**vars(args))
+        if show_inst.format not in ["text", "json", "table"]:
+            raise ValueError(
+                f"Invalid format: {show_inst.format}",
+                "Valid formats: [text, json, table]",
+            )
+        return show_inst
 
 
 class ExportCommand(BaseCommand):
     format: Literal["pyproject", "requirements"]
+    path: Path
     merge: bool
     remove_unknown: bool
     remove_unused: bool
     update_existing: bool
-    specifier: str | None = None
+    specifier: str
+
+    # def validate(self):
+    #     if not self.path:
+    #         raise ValueError("No output path is provided.")
+    #     if self.format not in ["pyproject", "requirements"]:
+    #         raise ValueError("No format specified or resolved from path.")
 
     @classmethod
     def from_base(cls, args: BaseCommand):
-        return cls(**vars(args))
+        """Create `ExportCommand` from a `BaseCommand` instance.
+
+        This method resolves the 'BaseCommand' (`args`) first if not already
+        resolved before creating and resolving/validating the `ExportCommand` attributes.
+
+        NOTE: When determining `format` from a path, only '.toml' extension is checked (for `pyproject` format), otherwise `requirements` format is used by default.
+
+        Args:
+            args: The `BaseCommand` instance.
+
+        Returns:
+            export_inst: `ExportCommand` instance.
+
+        Raises:
+            ValueError: If `path` is None,
+        """
+        if args.command != "export":
+            raise ValueError("Not 'export' command.")
+        if not args._resolved:
+            args = args._resolve_base_args()
+        export_inst = cls(**vars(args))
+        if not export_inst.path:
+            raise ValueError("No output path provided.")
+        if not export_inst.format:
+            export_inst.format = (
+                export_inst.path.suffix.lower() == ".toml"
+                and "pyproject"
+                or "requirements"
+            )
+        return export_inst
 
 
-@deprecated("MOVING TO 'PackageRequirement'", category=Warning)
-class Dependency(Requirement):
+@deprecated("MOVING TO 'PackageRequirement'")
+class OldDependency(Requirement):
     @classmethod
     def from_dist(cls, dist: Distribution, mode: str):
         """Create a `Dependency` from a package distribution object and mode.
@@ -171,11 +230,11 @@ class Dependency(Requirement):
             return self.compare(other)
         elif isinstance(other, str):
             try:
-                dep = Dependency(other)
+                dep = OldDependency(other)
                 return self.__eq__(dep)
             except:
                 return NotImplemented
-        elif isinstance(other, Dependency):
+        elif isinstance(other, OldDependency):
             return self.normalized_name == other.normalized_name
         else:
             return super().__eq__(other)
@@ -205,7 +264,7 @@ class Dependency(Requirement):
     def __hash__(self) -> int:
         return hash(tuple(self._iter_skip_version(canonicalize_name(self.name))))
 
-    def deep_compare(self, other: "Dependency"):
+    def deep_compare(self, other: "OldDependency"):
         """This performs the original __eq__ behavior of 'Requirement'. This
         considers specifier (version) along with all other original attributes.
 
@@ -220,9 +279,10 @@ class Dependency(Requirement):
         )
 
 
+@deprecated("Uses old dep format")
 def get_dependencies(used_packages: dict[str, PkgInfo], mode: str):
     deps = []
     for name, pkg in used_packages.items():
-        d = Dependency.from_dist(pkg.dist, mode)
+        d = OldDependency.from_dist(pkg.dist, mode)
         deps.append(d)
     return deps

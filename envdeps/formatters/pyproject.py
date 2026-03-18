@@ -77,3 +77,7 @@ class PyProjectFormatter(BaseFormatter):
         with open(path, "w") as f:
             tomlkit.dump(self.doc, f)
         return path
+
+    def _as_text(self) -> str:
+        doc_text = tomlkit.dumps(self.doc)
+        return doc_text
