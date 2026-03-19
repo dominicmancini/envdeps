@@ -1,4 +1,5 @@
 import ast
+import os
 from pathlib import Path
 from pprint import pp
 
@@ -74,14 +75,32 @@ def extract_file_imports(file: Path) -> set[str]:
 
 
 class ProjectScanner:
+    """Recursively scan files python source files in the `target` directory
+    (respecting `ignore_dirs`) and extract the imports from each file.
+
+    Attributes:
+        target: Target directory in python project to scan recursively.
+        ignore_dirs: List of directory names to ignore when searching.
+        all_imports: Set of all the top-level import names found in files (not filtered, so includes stdlib + local names)
+        file_imports: Mapping of files to the ImportSet extracted from the file.
+    """
+
     def __init__(self, target: Path, ignore_dirs: list[str]) -> None:
         self.target = target
-        self.ignore_dirs = ignore_dirs
+        self.ignore_dirs = set(ignore_dirs)
 
         self.all_imports: ImportSet = set()
         self.file_imports: FileImports = {}  # Mapping of file to imports in file
 
     def scan(self):
+        """Recursively iterate through target directory, collecting all the
+        import names and imports from each file.
+
+        Only method needed to call for this class.
+
+        Returns:
+            ImportSet, FileImports: A set of all import names from the scanned files, and a Mapping of file Paths to their ImportSet.
+        """
         # all_imports = set()
         for file in self.target.rglob("*.py"):
             should_ignore = any(dir in file.parts for dir in self.ignore_dirs)
@@ -91,6 +110,29 @@ class ProjectScanner:
             if file_imports:
                 self.all_imports.update(file_imports)
                 self.file_imports[file] = file_imports
+        return self.all_imports, self.file_imports
+
+    def _iter_files(self):
+        for dirpath, dirnames, filenames in os.walk(self.target):
+            # modify dirnames in-place
+            dirnames[:] = [d for d in dirnames if d not in self.ignore_dirs]
+            for file in filenames:
+                if file.endswith(".py"):
+                    yield Path(dirpath) / file
+
+    def iter_scan(self):
+        """An alternate to `scan` that may be a *little bit* faster.
+
+        NOTE: A `ProjectScanner` instance should NOT call both `.scan()` and `iter_scan()`, only one (these both modify the `all_imports`, and `file_imports` attributes.)
+
+        Returns:
+            ImportSet, FileImports: A set of all import names from the scanned files, and a Mapping of file Paths to their ImportSet.
+        """
+        for file in self._iter_files():
+            imports = extract_file_imports(file)
+            if imports:
+                self.all_imports.update(imports)
+                self.file_imports[file] = imports
         return self.all_imports, self.file_imports
 
 

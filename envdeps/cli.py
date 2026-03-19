@@ -1,7 +1,10 @@
 import argparse
 import os
 import shutil
+import sys
 from pathlib import Path
+
+from loguru import logger
 
 from envdeps.common import BaseCommand, ExportCommand, ShowCommand
 from envdeps.main import EnvDeps
@@ -11,6 +14,11 @@ from envdeps.main import EnvDeps
 # RichArgumentParser(...)'
 class RichArgumentParser(argparse.ArgumentParser):
     pass
+    # def print_help(self, file=None) -> None:
+    #     # print("HELLO FROM PRINT HELP")
+    #     from rich import get_console
+    #     return super().print_help(file)
+
     # def print_help(self, file=None):
     #     help_text = self.format_help()
     #     text = Text(help_text)
@@ -72,6 +80,21 @@ def export_cmd_cb(args: BaseCommand):
     )
 
 
+def check_cmd_cb(args: BaseCommand):
+    from envdeps.output import console
+
+    args._resolve_base_args()
+    lines = []
+    for name in ["target", "root", "prefix", "ignore"]:
+        attr = vars(args)[name]
+        # attr = getattr(args, name)
+        if attr:
+            lines.append("%s=%r" % (name, attr))
+    attrs_str = ",\n".join(lines)
+    console.print(attrs_str)
+    # console.print(f"CheckCommand(\n\t{attrs_str}\n)")
+
+
 parent_parser = RichArgumentParser(add_help=False)
 parent_parser_group = parent_parser.add_argument_group("Base Arguments")
 parent_parser_group.add_argument(
@@ -117,7 +140,7 @@ parent_parser_group.add_argument(
 
 
 def make_parser():
-    parser = RichArgumentParser(description="Main Envdeps prog.")
+    parser = RichArgumentParser("envdeps", description="Main Envdeps prog.")
     subparsers = parser.add_subparsers(
         dest="command",
         help="Available (sub)commands",
@@ -169,9 +192,11 @@ def make_parser():
         "Merge Options", "Options to control merge behavior."
     )
     merge_group_export.add_argument(
-        "-m",
+        # "-m",
         "--merge",
-        action="store_true",
+        # action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Merge with existing dependencies listed in 'path'.",
     )
     merge_group_export.add_argument(
@@ -198,22 +223,52 @@ def make_parser():
     )
 
     export_command.set_defaults(func=export_cmd_cb)
+
+    # NOTE: Adding 'check' command for checking resolved parameters. Justs prints info.
+    check_command = subparsers.add_parser(
+        "check", description="Check Resolved parameters.", parents=[parent_parser]
+    )
+    check_command.set_defaults(func=check_cmd_cb)
+
     return parser
 
 
-def parse_args(argv: list[str]):
-    parser = make_parser()
-    ns = BaseCommand()
-    args = parser.parse_args(argv, ns)
-    if args.color == False:
+def _check_disable_color(argv: list[str]):
+    """Disable colors if the `--no-color` flag was provided in the raw argv
+    list. This disables colors in the `envdeps.output` global console instance.
+
+    Returns:
+        True if '--no-color' was passed and color disabled, False otherwise
+    """
+    argv_lower = map(str.lower, argv)
+    if "--no-color" in argv_lower:
         os.environ["NO_COLOR"] = "1"
         from envdeps import output
 
         output.console.no_color = True
+        return True
+    return False
+
+
+def parse_args(argv: list[str]):
+    color_disabled = _check_disable_color(argv)
+    if color_disabled:
+        logger.info("Disabled colors for console.")
+    parser = make_parser()
+    ns = BaseCommand()
+    args = parser.parse_args(argv, ns)
     args.func(args)
     # print(args._resolved)
     # args = args._resolve_base_args()
     # print(args._resolved)
+
+
+def run():
+    """CLI Entrypoint function.
+
+    This runs the script using the cli args (`sys.argv[1:]`)
+    """
+    parse_args(sys.argv[1:])
 
 
 test_args = {
@@ -235,9 +290,13 @@ test_args = {
         "--remove-unused",
         "requirements-test.txt",
     ],
+    "check": [
+        "check",
+        "--target=envdeps",
+    ],
 }
 
 if __name__ == "__main__":
     # parse_args(test_args["show"])
-    parse_args(test_args["export"])
+    parse_args(["export", "--help"])
     # parse_args(["--help"])

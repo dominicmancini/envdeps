@@ -21,10 +21,11 @@ def _parse_file_incrementally(fpath):
 
 
 def try_parse_incrementally(text: str, fpath) -> set[str]:
-    """Parse the given file text incrementally, for files that encountered `SyntaxError` during ast parsing.
+    """Parse the given file text incrementally, for files that encountered
+    `SyntaxError` during ast parsing.
 
-    This parses one line at a time, collecting the imports
-    until it is assumed the import section is over.
+    This parses one line at a time, collecting the imports until it is
+    assumed the import section is over.
     """
     lines = text.strip().splitlines()
     # imports = set()
@@ -47,7 +48,9 @@ def try_parse_incrementally(text: str, fpath) -> set[str]:
 
 def _line_past_imports(line: str) -> bool:
     """Check if the import section is over.
-    This heuristic assumes import section is over before the first func or class definition.
+
+    This heuristic assumes import section is over before the first func
+    or class definition.
     """
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
@@ -144,6 +147,7 @@ def filter_stdlib_imports(imports: set[str]) -> set[str]:
 @deprecated("old")
 def get_imports_in_file(filepath):
     """Parse this file, collecting all imports and returning.
+
     NOTE: This now uses 'safe_parse_tree' which is different from
     original implementation and from new implementation (`collect_target_dir_imports`)
     """
@@ -225,15 +229,3 @@ def collect_target_dir_imports(target: Path, ignore_dirs: list[str]) -> set[str]
         all_imports.update(try_parse_incrementally(text, file))
         # all_imports.add(try_parse_incrementally(text, file))
     return all_imports
-
-
-if __name__ == "__main__":
-    f = Path("/home/domancini/projects/markformat/src/markformat/markformat.py")
-    imports = _parse_file_incrementally(f)
-    print(f"Incrememntal results: {imports}")
-    mod = safe_parse_tree(f)
-    if mod:
-        imports2 = _get_imports_from_tree(mod)
-        print(f"safe_parse_tree: {imports2}")
-    print("\n\nACTUAL FILE:\n")
-    print(f.read_text())

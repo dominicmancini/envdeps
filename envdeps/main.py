@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-from importlib.metadata import Distribution
 from pathlib import Path
 from typing import Literal
 
@@ -10,19 +8,11 @@ from envdeps.formatters.base import BaseFormatter
 from envdeps.formatters.pyproject import PyProjectFormatter
 from envdeps.formatters.requirements import RequirementsFormatter
 from envdeps.output import RequirementsLexer, console
-from envdeps.scanner import ImportSet, ProjectScanner
+from envdeps.scanner import ProjectScanner
 
 type FormatOpts = Literal["text", "json", "table"]
 
 type ExportFormats = Literal["pyproject", "requirements"]
-
-
-@dataclass
-class DistImportFiles:
-    name: str
-    dist: Distribution
-    imports: ImportSet
-    files: list[Path]
 
 
 class EnvDeps:
@@ -38,14 +28,6 @@ class EnvDeps:
 
     def show(self, format: FormatOpts = "text", verbose: bool = False):
         all_imports, file_imports = self.scanner.scan()
-        # dist_imports = self.env.resolve(all_imports)
-        # file_to_dist_imports = self.env.get_package_imports_by_file(
-        #     dist_imports, file_imports
-        # )
-        # # TODO: Implement other formats/verbose
-        # print("Packages to project imports:\n")
-        # for dist, imports in dist_imports.items():
-        #     print(f"{dist.name}: {imports}")
         resolver = DependencyResolver(self.prefix, self.root, self.ignore_dirs)
         for file, imports in file_imports.items():
             for imp in imports:
@@ -53,18 +35,14 @@ class EnvDeps:
         if format == "json":
             json_str = resolver.to_json()
             console.print_json(json_str)
-            # print(json_str)
         elif format == "table":
             tbl = resolver.to_table(verbose)
             console.print(tbl)
-            # tbl = resolver.to_table_data(verbose)
-            # format_table(*tbl.values(), header=list(tbl.keys()))
         else:
             reqset = resolver.to_requirement_set(mode="==")
             reqstr = reqset.to_string()
             reqs_syn = Syntax(reqstr, RequirementsLexer())
             console.print(reqs_syn)
-            # print(reqstr)
 
     def _get_formatter(self, path: Path, format: ExportFormats) -> BaseFormatter:
         if format == "pyproject":
@@ -111,15 +89,13 @@ class EnvDeps:
                 remove_unknown=remove_unknown,
             )
         else:
-            # Even tho its called merged, when 'merge=True', we are just
+            # Even tho its called merged, when 'merge=False', we are just
             # replacing all the dependencies (if any) with the scanned ones
             merged = scanned_deps
         if not merged:
             print("No merged dependencies to write. Aborting.")
             return
         fmt.dependencies = merged
-        # print("Final Dependencies:\n")
-        # print(fmt.dependencies.to_string())
         if not _write:
             print("\nExiting without writing to file")
             # print(fmt.dependencies.to_string())

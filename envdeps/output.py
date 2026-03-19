@@ -5,7 +5,6 @@ import pygments.token as t
 from pygments.lexer import RegexLexer
 from pygments.style import Style
 from rich.console import Console
-from rich.pretty import pretty_repr
 from rich.syntax import Syntax
 from rich.table import Table
 
@@ -77,11 +76,3 @@ def print_reqs(reqs_str: str):
 
 def toml_syntax(code: str):
     return Syntax(code, "toml")
-
-
-if __name__ == "__main__":
-    l = ["Apples", "Oranges", "Bananas", "Pears"]
-    res = pretty_repr(l, max_length=1)
-    get_console().print(res)
-    # print(res)
-    # pprint(l, max_length=1)
