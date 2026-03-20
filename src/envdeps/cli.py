@@ -1,10 +1,12 @@
 import argparse
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
 
 from loguru import logger
+from rich.text import Text
 
 from envdeps.common import BaseCommand, ExportCommand, ShowCommand
 from envdeps.main import EnvDeps
@@ -14,32 +16,30 @@ from envdeps.main import EnvDeps
 # RichArgumentParser(...)'
 class RichArgumentParser(argparse.ArgumentParser):
     pass
-    # def print_help(self, file=None) -> None:
-    #     # print("HELLO FROM PRINT HELP")
-    #     from rich import get_console
-    #     return super().print_help(file)
 
-    # def print_help(self, file=None):
-    #     help_text = self.format_help()
-    #     text = Text(help_text)
-    #
-    #     # Colorize section headings (e.g. "positional arguments:", "options:")
-    #     for match in re.finditer(r"^[a-zA-Z ]+:$", help_text, re.MULTILINE):
-    #         text.stylize("bold green", match.start(), match.end())
-    #
-    #     # Colorize short options like -h, -v
-    #     for match in re.finditer(r"(?<!\w)-[a-zA-Z]", help_text):
-    #         text.stylize("bold cyan", match.start(), match.end())
-    #
-    #     # Colorize long options like --help, --verbose
-    #     for match in re.finditer(r"--[a-zA-Z\-]+", help_text):
-    #         text.stylize("bold cyan", match.start(), match.end())
-    #
-    #     # Colorize the usage: prefix
-    #     for match in re.finditer(r"^usage:", help_text, re.MULTILINE):
-    #         text.stylize("bold yellow", match.start(), match.end())
-    #
-    #     console.print(text)
+    def print_help(self, file=None):
+        help_text = self.format_help()
+        text = Text(help_text)
+
+        # Colorize section headings (e.g. "positional arguments:", "options:")
+        for match in re.finditer(r"^[a-zA-Z ]+:$", help_text, re.MULTILINE):
+            text.stylize("bold green", match.start(), match.end())
+
+        # Colorize short options like -h, -v
+        for match in re.finditer(r"(?<!\w)-[a-zA-Z]", help_text):
+            text.stylize("bold cyan", match.start(), match.end())
+
+        # Colorize long options like --help, --verbose
+        for match in re.finditer(r"--[a-zA-Z\-]+", help_text):
+            text.stylize("bold cyan", match.start(), match.end())
+
+        # Colorize the usage: prefix
+        for match in re.finditer(r"^usage:", help_text, re.MULTILINE):
+            text.stylize("bold yellow", match.start(), match.end())
+
+        from envdeps.output import console
+
+        console.print(text)
 
 
 def get_terminal_width():
@@ -58,14 +58,14 @@ def strlist(val: str, sep=","):
 
 def show_cmd_cb(args: BaseCommand):
     args = ShowCommand.from_base(args)
-    print("Hello from command 'show'\n\n")
+    logger.debug("Hello from 'show' command.")
     envdeps = EnvDeps(args.target, args.root, args.prefix, args.ignore)
     envdeps.show(args.format, args.verbose)
 
 
 def export_cmd_cb(args: BaseCommand):
     args = ExportCommand.from_base(args)
-    print("Hello from command 'export'")
+    logger.debug("Hello from command 'export'")
     write = not args._debug
     envdeps = EnvDeps(args.target, args.root, args.prefix, args.ignore)
     envdeps.export(
@@ -258,9 +258,6 @@ def parse_args(argv: list[str]):
     ns = BaseCommand()
     args = parser.parse_args(argv, ns)
     args.func(args)
-    # print(args._resolved)
-    # args = args._resolve_base_args()
-    # print(args._resolved)
 
 
 def run():
@@ -296,7 +293,7 @@ test_args = {
     ],
 }
 
-if __name__ == "__main__":
-    # parse_args(test_args["show"])
-    parse_args(["export", "--help"])
-    # parse_args(["--help"])
+# if __name__ == "__main__":
+#     # parse_args(test_args["show"])
+#     parse_args(["export", "--help"])
+#     # parse_args(["--help"])
