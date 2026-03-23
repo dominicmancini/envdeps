@@ -90,35 +90,52 @@ class PkgInfo:
         return names_eq
 
 
-def resolve_active_env_prefix() -> Path | None:
+def resolve_active_env_prefix(root: Path | None = None) -> Path | None:
     """Resolve the active python environment prefix.
+
+    If `root` is provided, it will be used to resolve a virtual environment directory in the root of the project after first checking the environment variables.
 
     In order, the following are checked and returned if present:
     - `$VIRTUAL_ENV`: Used for when std `venv` is active.
     - `$PYENV_VIRTUAL_ENV`: Used when a `pyenv` version/virtualenv is activated
     - `$CONDA_PREFIX`: Used for the active conda.
-    - :py:`sys.prefix`: Fallback to active python sys.prefix.
+
+    If none are found, we will search for a venv directory in the root of the project
+
+    If all else fails, fallback to `sys.prefix`
 
     Returns:
         Path|None: Path to active venv prefix. (eg. `/home/user/.pyenv/versions/my_venv`)
     """
-    venv_path = os.environ.get("VIRTUAL_ENV")
-    if venv_path:
-        return Path(venv_path)
-    conda_path = os.environ.get("CONDA_PREFIX")
-    # NOTE: Pyenv env will also show same as '$VIRTUAL_ENV',
-    # but to check pyenv explicitly, do:
-    pyenv_env = os.environ.get("PYENV_VIRTUAL_ENV")
-    if pyenv_env:
-        return Path(pyenv_env)
+    # venv_path = os.environ.get("VIRTUAL_ENV")
+    # if venv_path:
+    #     return Path(venv_path)
+    # # NOTE: Pyenv env will also show same as '$VIRTUAL_ENV',
+    # # but to check pyenv explicitly, do:
+    # pyenv_env = os.environ.get("PYENV_VIRTUAL_ENV")
+    # if pyenv_env:
+    #     return Path(pyenv_env)
+    #
+    # conda_path = os.environ.get("CONDA_PREFIX")
+    # if conda_path:
+    #     return Path(conda_path)
 
-    if conda_path:
-        return Path(conda_path)
+    for var in ["VIRTUAL_ENV", "CONDA_PREFIX", "PYENV_VIRTUAL_ENV"]:
+        value = os.environ.get(var, None)
+        if value is not None:
+            return Path(value)
+
+    if root:
+        pyvenv_cfg = next(root.rglob("pyvenv.cfg"), None)
+        if pyvenv_cfg is not None:
+            return pyvenv_cfg.parent
+
+    # Next, try to find a venv folder in the root of the project.
+    # Because there may be different names, we will search for the 'pyvenv.cfg' file
+    # that should be in venvs
 
     # If all else fails, return sys.prefix
-    if sys.prefix:
-        return Path(sys.prefix)
-    return None
+    return Path(sys.prefix)
 
 
 def get_env_site_dir(env_prefix: Path | str) -> list[str]:

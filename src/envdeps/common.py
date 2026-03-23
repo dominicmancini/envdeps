@@ -66,7 +66,7 @@ class BaseCommand(argparse.Namespace):
         resolved_root, resolved_target = resolve_paths(self.root, self.target)
         self.root, self.target = resolved_root, resolved_target
         if self.prefix is None:
-            prefix = resolve_active_env_prefix()
+            prefix = resolve_active_env_prefix(self.root)
             if not prefix:
                 raise ValueError("Python Environment Prefix could not be resolved")
             self.prefix = prefix
