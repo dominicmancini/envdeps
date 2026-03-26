@@ -16,14 +16,22 @@ type ExportFormats = Literal["pyproject", "requirements"]
 
 
 class EnvDeps:
-    def __init__(self, target: Path, root: Path, prefix: Path, ignore_dirs: list[str]):
+    def __init__(
+        self,
+        target: Path,
+        root: Path,
+        prefix: Path,
+        ignore_dirs: list[str],
+        scan_ipynb: bool = False,
+    ):
         # NOTE: This class expects fully resolved arguments
         # TODO: handle resolving missing args after parsing CLI
         self.target = target
         self.root = root
         self.prefix = prefix
         self.ignore_dirs: list[str] = ignore_dirs
-        self.scanner = ProjectScanner(self.target, self.ignore_dirs)
+        self.scan_ipynb = scan_ipynb
+        self.scanner = ProjectScanner(self.target, self.ignore_dirs, self.scan_ipynb)
         # self.env = Environment(self.prefix, self.root, self.ignore_dirs)
 
     def show(self, format: FormatOpts = "text", verbose: bool = False):

@@ -1,7 +1,9 @@
+import atexit
 import json
 import os
 import site
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
@@ -9,6 +11,7 @@ from pprint import pformat
 from warnings import deprecated
 
 from loguru import logger
+from rich.box import SIMPLE_HEAD
 from rich.pretty import pretty_repr
 from rich.table import Table
 
@@ -54,10 +57,26 @@ class ResolvedDependency:
 
 type DistMap = dict[str, metadata.Distribution]
 
+type _SrcFile = str
+type _ModuleNames = set[str]
+
 
 class DependencyResolver:
+    """Resolve import names from scanned files to installed packages in the
+    python environment.
+
+    Attributes:
+        dist_map: A mapping of top-level import names to their `metadata.Distribution` object. Since a package can have multiple top-level imports, multiple key, value pairs may exist for a given Distribution.
+        resolved: A mapping of package names to their `ResolvedDependency` object.
+        notify_unresolved: At exit, should a warning message be printed to console displaying modules that could not be resolved? (default False). This should be True if being called from a main entrypoint (i.e. `envdeps/main.py`). It is only provided to allow other programmatic use of this class besides the main CLI.
+    """
+
     def __init__(
-        self, prefix: Path, root: Path, ignore_dirs: list[str] = list(DEFAULT_IGNORES)
+        self,
+        prefix: Path,
+        root: Path,
+        ignore_dirs: list[str] = list(DEFAULT_IGNORES),
+        notify_unresolved: bool = False,
     ) -> None:
         # root & ignore_dirs are needed when resolving local imports
         self._root = root
@@ -68,6 +87,33 @@ class DependencyResolver:
         self._site_dirs = self._get_site_dirs(prefix)
         self.dist_map: DistMap = self._build_dist_map()
         self.resolved: dict[str, ResolvedDependency] = {}
+        self._unresolved: dict[_SrcFile, _ModuleNames] = defaultdict(set)
+        self.notify_unresolved = notify_unresolved
+        if self.notify_unresolved:
+            atexit.register(self._on_exit_notify_unresolved)
+
+    def _on_exit_notify_unresolved(self):
+        """An 'atexit' callback to print warning messages about unresolved
+        module/import names found in the project.
+
+        If there is no unresolved, nothing happens
+        """
+        from envdeps.output import console
+
+        if not self._unresolved:
+            return
+        console.rule("[bold red]Found Unresolved Dependencies")
+        console.print(
+            f"\nImports from these module names could not be resolved to packages installed in the environment '{self._prefix}', local, or stdlib modules."
+        )
+        # console.print("[bold red]ERROR:[/bold red] Found unresolved dependencies:")
+        t = Table(title="Unresolved Imports", box=SIMPLE_HEAD)
+        t.add_column("Source File", style="bold green")
+        t.add_column("Unresolved Names", style="bold yellow")
+        for src, modnames in self._unresolved.items():
+            row = [os.path.relpath(src, self._root), pretty_repr(modnames)]
+            t.add_row(*row)
+        console.print(t)
 
     def _get_site_dirs(self, prefix: Path) -> list[str]:
         site_dirs = site.getsitepackages([str(prefix)])
@@ -96,8 +142,6 @@ class DependencyResolver:
 
     def add_import(self, module_name: str, source_file: Path | str):
         # 1. TODO: skip if stdlib or local
-        # if import_is_local(self._root, module_name, self._ignore_dirs):
-        #     return
         if self._is_stdlib_or_local(module_name):
             return
 
@@ -105,7 +149,15 @@ class DependencyResolver:
 
         # 2. find the distribution
         # dist = self.dist_map.get(module_name)
-        dist = self.dist_map[module_name]
+        # dist = self.dist_map[module_name]
+        dist = self.dist_map.get(module_name, None)
+        if not dist:
+            self._unresolved[source_file].add(module_name)
+            logger.warning(
+                f"Could not find dist for module_name: {module_name} found in source_file: {source_file}"
+            )
+            return
+
         pkg_name = dist.name if dist else module_name
 
         # 3. Get or create the ResolvedDependency object

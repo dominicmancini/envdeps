@@ -137,6 +137,12 @@ parent_parser_group.add_argument(
     default=True,
     help="Enable/Disable colorized output (enabled by default).",
 )
+parent_parser_group.add_argument(
+    "--ipynb",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Scan imports in '.ipynb' files in addtion to '.py'? (default False)",
+)
 
 
 def make_parser():
@@ -292,6 +298,8 @@ test_args = {
         "--target=envdeps",
     ],
 }
+if __name__ == "__main__":
+    parse_args(["show", "--help"])
 
 # if __name__ == "__main__":
 #     # parse_args(test_args["show"])

@@ -2,6 +2,9 @@ import ast
 import os
 from pathlib import Path
 from pprint import pp
+from warnings import deprecated
+
+from envdeps.ipynb import _parse_raw_notebook
 
 type ImportSet = set[str]
 type FileImports = dict[Path, ImportSet]
@@ -52,7 +55,7 @@ def try_parse_incrementally(text: str, fpath) -> set[str]:
             break
         try:
             partial_content = "".join(accumulated_lines)
-            tree = ast.parse(partial_content, filename=str(fpath))
+            tree = ast.parse(partial_content)
             last_successful_imports = _get_imports_from_tree(tree)
         except SyntaxError:
             # keep going, might be incomplete statement
@@ -60,8 +63,30 @@ def try_parse_incrementally(text: str, fpath) -> set[str]:
     return last_successful_imports
 
 
+def extract_imports_from_text(text: str, fpath: str = "<unknown>") -> set[str]:
+    """Extract imports from raw python code."""
+    if not text.strip():
+        return set()
+    try:
+        tree = ast.parse(text)
+        file_imports = _get_imports_from_tree(tree)
+        return file_imports
+    except SyntaxError:
+        pass
+    file_imports = try_parse_incrementally(text, fpath=fpath)
+    return file_imports
+
+
 def extract_file_imports(file: Path) -> set[str]:
-    text = file.read_text()
+    """Extract imports from a '.py' or '.ipynb' file, returning a set of the
+    file's imports."""
+    if file.suffix.lower() == ".ipynb":
+        raw_json = file.read_text()
+        text = _parse_raw_notebook(raw_json)
+        if not text:
+            return set()
+    else:
+        text = file.read_text()
     if not text.strip():
         return set()
     try:
@@ -85,9 +110,13 @@ class ProjectScanner:
         file_imports: Mapping of files to the ImportSet extracted from the file.
     """
 
-    def __init__(self, target: Path, ignore_dirs: list[str]) -> None:
+    def __init__(
+        self, target: Path, ignore_dirs: list[str], scan_ipynb: bool = False
+    ) -> None:
         self.target = target
         self.ignore_dirs = set(ignore_dirs)
+        self.scan_ipynb = scan_ipynb
+        self._exts = (".py", ".ipynb") if scan_ipynb else (".py")
 
         self.all_imports: ImportSet = set()
         self.file_imports: FileImports = {}  # Mapping of file to imports in file
@@ -96,12 +125,27 @@ class ProjectScanner:
         """Recursively iterate through target directory, collecting all the
         import names and imports from each file.
 
+        If `self.scan_ipynb == True`, this will also scan ipynb notebooks in additon to python files. Otherwise
+
         Only method needed to call for this class.
 
         Returns:
             ImportSet, FileImports: A set of all import names from the scanned files, and a Mapping of file Paths to their ImportSet.
         """
+        for dirpath, dirnames, filenames in self.target.walk():
+            dirnames[:] = [d for d in dirnames if d not in self.ignore_dirs]
+            for filename in filenames:
+                if filename.lower().endswith(self._exts):
+                    fpath = dirpath.joinpath(filename)
+                    imports = extract_file_imports(fpath)
+                    self.all_imports.update(imports)
+                    self.file_imports[fpath] = imports
+        return self.all_imports, self.file_imports
+
         # all_imports = set()
+
+    @deprecated("Use 'scan()'. This method does not handle '.ipynb' files")
+    def _old_scan(self):
         for file in self.target.rglob("*.py"):
             should_ignore = any(dir in file.parts for dir in self.ignore_dirs)
             if should_ignore:

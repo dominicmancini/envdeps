@@ -30,3 +30,6 @@ packages = ["src/envdeps"]
 typeCheckingMode = "standard"
 include = ["src", "tests"]
 extraPaths = ["src", "tests"]
+
+[tool.ruff.format]
+docstring-code-format = true
