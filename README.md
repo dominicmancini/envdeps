@@ -7,6 +7,7 @@ An 'environment-aware' Python project dependency scanner and analyzer.
 - Intelligently scan your python project and get all the dependencies you *actually* used.
 - Automatically create or update a dependency file format with version specifiers based on your installed packages versions.
 - Finely-control how the scanned dependencies merge with entries in your existing dependency file(s).
+- Scan both python files and '.ipynb' notebooks.
 
 Envdeps does *not* need to be installed in each project environment. With `envdeps` available on `$PATH`, run in any of your local project directories.
 
@@ -51,7 +52,8 @@ One benefit of envdeps is that it does not require installation into each enviro
 It is recommended to install with `pipx` so that `envdeps` is globally available, even when different python environments are active.
 
 ```{sh}
-pipx install envdeps
+# Install globally with 'pipx'
+pipx install git+https://github.com/dominicmancini/envdeps.git
 ```
 
 ## Commands and Options
@@ -65,15 +67,9 @@ The following arguments apply to all `envdeps` commands.
 - `-e/--env-prefix`: The Environment prefix for the python environment. Tries to resolve by multiple methods:
     * In order: Values of `$VIRTUAL_ENV`, `$CONDA_PREFIX`, `$PYENV_VIRTUAL_ENV`. Fallback to the value of `sys.prefix`
 - `-i/--ignore`: Comma-separated list of directory names to ignore (by default merges with list of common ignored directories)
+- `--ipynb`: Whether to scan python notebooks ('.ipynb' files) in addition to '.py' files?
 
 
-```{sh}
--i, --ignore IGNORE   Comma seperated list of directory names to ignore.
--e, --env-prefix PREFIX
-                    python environment prefix. Resolves to active venv/version.
--r, --root ROOT       Root of the project to scan. Defaults to CWD.
--t, --target TARGET   Target directory containing source files.
-```
 
 ### `show`
 
@@ -83,6 +79,7 @@ Options:
 - `-f/--format`: One of `text,json,table`. Useful for piping into other tools.
 - `--verbose`: Show which files & imports triggered each dependency.
 
+#### `show` example:
 
 ```{sh}
 envdeps show --target=envdeps --format=table
@@ -121,6 +118,57 @@ Merge Options:
 - `--remove-unknown`: Whether to remove unknown entries from existing dependencies, this may include specifiers such as those using pip args & local paths (i.e., `-e ~/some_local_package`) and other non-standard formats (Default **False**)
 - `--remove-unused`: Whether to remove existing dependency entries that were not found from scanning used project dependencies. (Default **False**)
 - `--update-existing`: When a scanned dependency already has an entry in existing dependencies, replace the entry to use the given `--specifier` and scanned version?
+
+#### `export` example
+
+
+**'pyproject.toml' Before Scan:**
+```{toml}
+[project]
+name = "foo"
+version = "0.1.0"
+description = "Foo bar"
+dependencies = [
+	"typer",
+	"rich",
+	"pandas",
+	"numpy"
+]
+
+
+```
+Running Command:
+`envdeps export --target src/foo --merge --update-existing --specifier '>=' --remove-unused --remove-unknown pyproject.toml`
+
+**'pyproject.toml' After Scanning**:
+``
+```{toml}
+[project]
+name = "foo"
+version = "0.1.0"
+description = "Foo bar"
+dependencies = [
+    "pandas>=2.3.0",
+    "humanize>=4.12.3",
+    "duckdb>=1.4.0",
+    "polars>=1.33.1",
+    "typing_extensions>=4.15.0",
+    "typer-slim>=0.20.1",
+    "platformdirs>=4.3.8",
+    "rich>=14.2.0",
+    "PyPika>=0.48.9"
+]
+```
+- Updated to include dependencies actually imported in project.
+- Because of `--remove-unused`, it removed unused dependencies (e.g. `numpy`)
+- `--update-existing` updated existing entries with the version specifier
+
+
+
+## Planned features:
+
+- [x] Implement scanning of `.ipynb` python notebooks
+- [ ] Extend to other dependency formats (i.e. lock files, etc.)
 
 
 
