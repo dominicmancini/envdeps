@@ -5,10 +5,13 @@ import sys
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
+from warnings import deprecated
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
+
+from envdeps.detection import detect_active_env
 
 
 def normalize(name: str):
@@ -90,6 +93,7 @@ class PkgInfo:
         return names_eq
 
 
+@deprecated("Use `envdeps.detection.detect_active_env`.")
 def resolve_active_env_prefix(root: Path | None = None) -> Path | None:
     """Resolve the active python environment prefix.
 
@@ -200,7 +204,7 @@ def get_env_package_info(prefix: str | Path | None):
         ValueError: [TODO:throw]
     """
     if prefix is None:
-        prefix = resolve_active_env_prefix()
+        prefix = detect_active_env()
     assert prefix is not None, "Env Prefix is None"
     site_dirs = get_env_site_dir(prefix)
     if not site_dirs:

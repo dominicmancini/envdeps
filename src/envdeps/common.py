@@ -7,7 +7,8 @@ from warnings import deprecated
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from envdeps.pkgs import PkgInfo, normalize, resolve_active_env_prefix
+from envdeps.detection import detect_active_env
+from envdeps.pkgs import PkgInfo, normalize
 from envdeps.utils import resolve_paths
 
 type PathOrStr = Path | str
@@ -66,7 +67,8 @@ class BaseCommand(argparse.Namespace):
         resolved_root, resolved_target = resolve_paths(self.root, self.target)
         self.root, self.target = resolved_root, resolved_target
         if self.prefix is None:
-            prefix = resolve_active_env_prefix(self.root)
+            # prefix = resolve_active_env_prefix(self.root)
+            prefix = detect_active_env(self.root)
             if not prefix:
                 raise ValueError("Python Environment Prefix could not be resolved")
             self.prefix = prefix
